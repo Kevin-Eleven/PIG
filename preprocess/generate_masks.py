@@ -43,8 +43,23 @@ from PIL import Image
 from segment_anything import SamPredictor, sam_model_registry
 
 
+def get_view_key(ds) -> str:
+    """Return e.g. 'lmlo' / 'rcc' combining laterality + view position.
+
+    ImageLaterality is blank in BCS-DBT DICOMs; the real laterality is
+    nested under ViewCodeSequence[0].FrameAnatomySequence[0].FrameLaterality.
+    """
+    laterality = ""
+    try:
+        laterality = str(ds.ViewCodeSequence[0].FrameAnatomySequence[0].FrameLaterality)
+    except (AttributeError, IndexError):
+        laterality = str(getattr(ds, "ImageLaterality", ""))
+    view_position = str(getattr(ds, "ViewPosition", ""))
+    return (laterality + view_position).lower()
+
+
 def build_dicom_index(dicom_dir: str) -> dict:
-    """Map (PatientID, StudyUID) -> (dicom_path, orig_rows, orig_cols)."""
+    """Map (PatientID, view_key e.g. 'lmlo') -> (dicom_path, study_uid, orig_rows, orig_cols)."""
     index = {}
     for root, _, files in os.walk(dicom_dir):
         for f in files:
@@ -54,8 +69,10 @@ def build_dicom_index(dicom_dir: str) -> dict:
             ds = pydicom.dcmread(path, stop_before_pixels=True)
             patient_id = str(getattr(ds, "PatientID", "UNKNOWN"))
             study_uid = str(getattr(ds, "StudyInstanceUID", "UNKNOWN"))
-            index[(patient_id, study_uid)] = (
+            view_key = get_view_key(ds)
+            index[(patient_id, view_key)] = (
                 path,
+                study_uid,
                 int(ds.Rows),
                 int(ds.Columns),
             )
