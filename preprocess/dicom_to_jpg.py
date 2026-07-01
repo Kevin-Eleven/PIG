@@ -27,21 +27,25 @@ def normalize_to_uint8(frame: np.ndarray) -> np.ndarray:
     return (frame * 255).astype(np.uint8)
 
 
-def convert_file(dcm_path: str, out_dir: str, img_size: tuple, series_id: str) -> int:
+def convert_file(dcm_path: str, out_dir: str, img_size: tuple) -> tuple:
     ds = pydicom.dcmread(dcm_path)
     pixels = ds.pixel_array  # shape: (num_frames, H, W) or (H, W)
 
     if pixels.ndim == 2:
         pixels = pixels[np.newaxis, ...]
 
+    patient_id = str(getattr(ds, "PatientID", "UNKNOWN"))
+    study_uid = str(getattr(ds, "StudyInstanceUID", "UNKNOWN"))
+    file_id = f"{patient_id}_{study_uid}"
+
     count = 0
     for i, frame in enumerate(pixels):
         img8 = normalize_to_uint8(frame)
         im = Image.fromarray(img8, mode="L").resize(img_size, Image.BILINEAR)
-        out_path = os.path.join(out_dir, f"{series_id}_{i:03d}.jpg")
+        out_path = os.path.join(out_dir, f"{file_id}_{i:03d}.jpg")
         im.save(out_path, quality=95)
         count += 1
-    return count
+    return count, patient_id, study_uid
 
 
 def main():
@@ -49,6 +53,8 @@ def main():
     parser.add_argument("--dicom_dir", default="/scratch/harisa_iitp/data/dicom")
     parser.add_argument("--out_dir", default="/scratch/harisa_iitp/data/slices_512/img")
     parser.add_argument("--img_size", type=int, nargs=2, default=[512, 512])
+    parser.add_argument("--mapping_csv", default=None,
+                         help="Optional path to write a PatientID/StudyUID -> file prefix mapping CSV")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -62,14 +68,23 @@ def main():
     print(f"Found {len(dcm_files)} DICOM files under {args.dicom_dir}")
 
     total_slices = 0
+    mapping_rows = []
     for idx, dcm_path in enumerate(dcm_files):
-        series_id = f"series{idx:04d}"
         try:
-            n = convert_file(dcm_path, args.out_dir, tuple(args.img_size), series_id)
+            n, patient_id, study_uid = convert_file(dcm_path, args.out_dir, tuple(args.img_size))
             total_slices += n
-            print(f"[{idx + 1}/{len(dcm_files)}] {dcm_path} -> {n} slices")
+            mapping_rows.append((patient_id, study_uid, n, dcm_path))
+            print(f"[{idx + 1}/{len(dcm_files)}] {dcm_path} -> {n} slices (PatientID={patient_id})")
         except Exception as e:
             print(f"[{idx + 1}/{len(dcm_files)}] FAILED: {dcm_path} ({e})")
+
+    if args.mapping_csv:
+        import csv
+        with open(args.mapping_csv, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["PatientID", "StudyUID", "NumSlices", "SourceDicom"])
+            writer.writerows(mapping_rows)
+        print(f"Wrote mapping CSV -> {args.mapping_csv}")
 
     print(f"Done. Total slices written: {total_slices} -> {args.out_dir}")
 
