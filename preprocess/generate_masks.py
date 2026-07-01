@@ -48,11 +48,14 @@ def get_view_key(ds) -> str:
     """Return e.g. 'lmlo' / 'rcc' combining laterality + view position.
 
     ImageLaterality is blank in BCS-DBT DICOMs; the real laterality is
-    nested under ViewCodeSequence[0].FrameAnatomySequence[0].FrameLaterality.
+    nested under SharedFunctionalGroupsSequence[0].FrameAnatomySequence[0]
+    .FrameLaterality (tag 0020,9072).
     """
     laterality = ""
     try:
-        laterality = str(ds.ViewCodeSequence[0].FrameAnatomySequence[0].FrameLaterality)
+        laterality = str(
+            ds.SharedFunctionalGroupsSequence[0].FrameAnatomySequence[0].FrameLaterality
+        )
     except (AttributeError, IndexError):
         laterality = str(getattr(ds, "ImageLaterality", ""))
     view_position = str(getattr(ds, "ViewPosition", ""))

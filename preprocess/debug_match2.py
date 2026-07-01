@@ -19,7 +19,9 @@ import pydicom
 def get_view_key(ds) -> str:
     laterality = ""
     try:
-        laterality = str(ds.ViewCodeSequence[0].FrameAnatomySequence[0].FrameLaterality)
+        laterality = str(
+            ds.SharedFunctionalGroupsSequence[0].FrameAnatomySequence[0].FrameLaterality
+        )
     except (AttributeError, IndexError):
         laterality = str(getattr(ds, "ImageLaterality", ""))
     view_position = str(getattr(ds, "ViewPosition", ""))
