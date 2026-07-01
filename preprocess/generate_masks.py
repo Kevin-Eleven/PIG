@@ -35,6 +35,7 @@ Usage:
 import argparse
 import csv
 import os
+import re
 
 import numpy as np
 import pydicom
@@ -113,19 +114,21 @@ def main():
         for row in reader:
             total_rows += 1
             patient_id = row["PatientID"]
-            study_uid = row["StudyUID"]
             slice_idx = int(row["Slice"])
+            # CSV View can have a trailing digit for a second box on the same
+            # view (e.g. "lmlo1") -- strip it to match the DICOM's view_key.
+            view_key = re.sub(r"\d+$", "", row["View"]).lower()
+
+            key = (patient_id, view_key)
+            if key not in dicom_index:
+                continue
+            dcm_path, study_uid, orig_rows, orig_cols = dicom_index[key]
 
             img_name = f"{patient_id}_{study_uid}_{slice_idx:03d}.jpg"
             img_path = os.path.join(args.img_dir, img_name)
             if not os.path.exists(img_path):
+                print(f"  matched DICOM for {key} but missing slice file {img_name}")
                 continue
-
-            key = (patient_id, study_uid)
-            if key not in dicom_index:
-                print(f"  no DICOM header found for {key}, skipping {img_name}")
-                continue
-            _, orig_rows, orig_cols = dicom_index[key]
 
             scale_x = out_w / orig_cols
             scale_y = out_h / orig_rows
