@@ -14,6 +14,7 @@ set -eo pipefail
 
 module purge
 module load MLDL/miniconda3
+source /home/apps/MLDL/DL-CondaPy3/etc/profile.d/conda.sh
 conda activate pig_env
 
 cd /home/harisa_iitp/PIG
