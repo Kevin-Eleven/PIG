@@ -30,10 +30,19 @@ def patch_x_model_path(text: str, value: str) -> str:
     return new_text
 
 
+def patch_n_epochs(text: str, value: int) -> str:
+    pattern = re.compile(r"(\n\s*n_epochs = )\d+")
+    new_text, n = pattern.subn(rf"\g<1>{value}", text, count=1)
+    if n != 1:
+        raise SystemExit("Could not find Train.n_epochs assignment in config.py")
+    return new_text
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_model_type", choices=["x", "y"], default=None)
     parser.add_argument("--x_model_path", default=None)
+    parser.add_argument("--n_epochs", type=int, default=None)
     parser.add_argument("--config_path", default=CONFIG_PATH)
     args = parser.parse_args()
 
@@ -47,6 +56,10 @@ def main():
     if args.x_model_path is not None:
         text = patch_x_model_path(text, args.x_model_path)
         print(f"Set Train.x_model_path = '{args.x_model_path}'")
+
+    if args.n_epochs is not None:
+        text = patch_n_epochs(text, args.n_epochs)
+        print(f"Set Train.n_epochs = {args.n_epochs}")
 
     with open(args.config_path, "w") as f:
         f.write(text)
