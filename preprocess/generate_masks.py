@@ -14,6 +14,11 @@ matched_slices.txt listing exactly which img filenames got a mask, so a later
 step can prune img/ down to the same set (PIG requires img/, mask/, masked/,
 multi_mask/ to all have matching file counts).
 
+A handful of slices carry two boxes (e.g. View "lmlo" and "lmlo1" on the same
+slice). Boxes are grouped by slice first and their SAM masks unioned before a
+single mask file is written per slice -- writing one mask per CSV row instead
+would let the second box's mask silently overwrite the first's.
+
 Requires a GPU. Run inside an interactive session, e.g.:
     salloc --nodes=1 --time=4:00:00 --partition=gpu --gres=gpu:1
     conda activate pig_env
@@ -110,7 +115,10 @@ def main():
 
     out_w, out_h = args.img_size
 
-    matched = []
+    # Group all box rows by slice first so multiple boxes on the same slice
+    # (e.g. View "lmlo" and "lmlo1") get unioned into one mask instead of the
+    # last box silently overwriting an earlier one's mask file.
+    rows_by_slice = {}
     total_rows = 0
     with open(args.boxes_csv, newline="") as f:
         reader = csv.DictReader(f)
@@ -121,39 +129,47 @@ def main():
             # CSV View can have a trailing digit for a second box on the same
             # view (e.g. "lmlo1") -- strip it to match the DICOM's view_key.
             view_key = re.sub(r"\d+$", "", row["View"]).lower()
+            rows_by_slice.setdefault((patient_id, view_key, slice_idx), []).append(row)
 
-            key = (patient_id, view_key)
-            if key not in dicom_index:
-                continue
-            dcm_path, study_uid, orig_rows, orig_cols = dicom_index[key]
+    matched = []
+    for (patient_id, view_key, slice_idx), box_rows in rows_by_slice.items():
+        key = (patient_id, view_key)
+        if key not in dicom_index:
+            continue
+        dcm_path, study_uid, orig_rows, orig_cols = dicom_index[key]
 
-            img_name = f"{patient_id}_{study_uid}_{slice_idx:03d}.jpg"
-            img_path = os.path.join(args.img_dir, img_name)
-            if not os.path.exists(img_path):
-                print(f"  matched DICOM for {key} but missing slice file {img_name}")
-                continue
+        img_name = f"{patient_id}_{study_uid}_{slice_idx:03d}.jpg"
+        img_path = os.path.join(args.img_dir, img_name)
+        if not os.path.exists(img_path):
+            print(f"  matched DICOM for {key} but missing slice file {img_name}")
+            continue
 
-            scale_x = out_w / orig_cols
-            scale_y = out_h / orig_rows
+        scale_x = out_w / orig_cols
+        scale_y = out_h / orig_rows
+
+        image = np.array(Image.open(img_path).convert("RGB"))
+        predictor.set_image(image)
+
+        union_mask = np.zeros((out_h, out_w), dtype=bool)
+        for row in box_rows:
             x = float(row["X"]) * scale_x
             y = float(row["Y"]) * scale_y
             w = float(row["Width"]) * scale_x
             h = float(row["Height"]) * scale_y
             box = np.array([x, y, x + w, y + h])
 
-            image = np.array(Image.open(img_path).convert("RGB"))
-            predictor.set_image(image)
             masks, scores, _ = predictor.predict(box=box, multimask_output=True)
             best_mask = masks[int(np.argmax(scores))]
+            union_mask |= best_mask
 
-            mask_img = (best_mask.astype(np.uint8) * 255)
-            Image.fromarray(mask_img, mode="L").save(
-                os.path.join(args.mask_dir, img_name), quality=95
-            )
-            matched.append(img_name)
-            print(f"[{len(matched)}] {img_name} <- box scaled from ({orig_cols}x{orig_rows})")
+        mask_img = (union_mask.astype(np.uint8) * 255)
+        Image.fromarray(mask_img, mode="L").save(
+            os.path.join(args.mask_dir, img_name), quality=95
+        )
+        matched.append(img_name)
+        print(f"[{len(matched)}] {img_name} <- {len(box_rows)} box(es) scaled from ({orig_cols}x{orig_rows})")
 
-    print(f"Done. {len(matched)}/{total_rows} annotation rows matched and masked.")
+    print(f"Done. {len(matched)}/{len(rows_by_slice)} slices matched and masked ({total_rows} annotation rows).")
 
     if args.matched_list:
         with open(args.matched_list, "w") as f:

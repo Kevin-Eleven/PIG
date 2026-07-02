@@ -8,7 +8,7 @@ class PIGConfig:
     class Data:
         # 数据配置
 
-        data_dir = os.path.join('..', 'data', 'slices_512')
+        data_dir = '/scratch/harisa_iitp/data/slices_512'
         img_size = (512, 512)  # 图像resize后的大小（resize后输入至网络）
         max_pixel = 255
 
