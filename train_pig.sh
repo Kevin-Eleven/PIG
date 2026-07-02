@@ -10,7 +10,7 @@
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=khalieqahmad@gmail.com
 
-set -euo pipefail
+set -eo pipefail
 
 module purge
 module load MLDL/miniconda3

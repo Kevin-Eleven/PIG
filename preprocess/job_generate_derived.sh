@@ -8,7 +8,7 @@
 #SBATCH --output=/scratch/harisa_iitp/PIG_outputs/gen_derived_%j.out
 #SBATCH --error=/scratch/harisa_iitp/PIG_outputs/gen_derived_%j.err
 
-set -euo pipefail
+set -eo pipefail
 
 module purge
 module load MLDL/miniconda3
