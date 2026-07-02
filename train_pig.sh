@@ -13,7 +13,7 @@
 set -euo pipefail
 
 module purge
-module load mldl/Miniconda
+module load MLDL/miniconda3
 conda activate pig_env
 
 cd /home/harisa_iitp/PIG
