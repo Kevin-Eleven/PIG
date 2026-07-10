@@ -30,9 +30,11 @@ ln -sfn /scratch/harisa_iitp/PIG_outputs/log ./log
 # conditioning signal.
 # ---------------------------------------------------------------------------
 
-# Locate the DBT x-model trained in Phase 1 (train_pig.sh, desc x_mask_y_img_x_pretrained).
+# Locate the DBT x-model trained in Phase 1 (desc x_mask_y_img_x_pretrained).
+# NOTE: this lives in ~/log, not the scratch log dir -- the scratch copies are
+# older/worse runs of the same desc, and picking those would degrade the guider.
 X_MODEL=$(python3 preprocess/find_best_checkpoint.py \
-    --log_root /scratch/harisa_iitp/PIG_outputs/log \
+    --log_root /home/harisa_iitp/log \
     --desc_suffix x_mask_y_img_x_pretrained)
 echo "Using DBT x-model guider: $X_MODEL"
 

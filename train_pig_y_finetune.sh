@@ -29,12 +29,13 @@ ln -sfn /scratch/harisa_iitp/PIG_outputs/log ./log
 # freeze fine-tuning). Same DBT x-model guider as Stage B.
 # ---------------------------------------------------------------------------
 
+# Same ~/log x-model guider as Stage B (see note there).
 X_MODEL=$(python3 preprocess/find_best_checkpoint.py \
-    --log_root /scratch/harisa_iitp/PIG_outputs/log \
+    --log_root /home/harisa_iitp/log \
     --desc_suffix x_mask_y_img_x_pretrained)
 echo "Using DBT x-model guider: $X_MODEL"
 
-# Best y-model from Stage B (VinDr pretrain).
+# Best y-model from Stage B (VinDr pretrain) -- written to scratch via ./log symlink.
 Y_PRETRAINED=$(python3 preprocess/find_best_checkpoint.py \
     --log_root /scratch/harisa_iitp/PIG_outputs/log \
     --desc_suffix x_mask_y_img_y_vindr_pretrain)
