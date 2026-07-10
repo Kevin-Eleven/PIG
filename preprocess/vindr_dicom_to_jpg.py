@@ -99,18 +99,31 @@ def main():
     parser.add_argument("--include_normals", type=int, default=0,
                         help="Also convert this many 'No Finding' images (blank masks later)")
     parser.add_argument("--split", default="training")
+    parser.add_argument("--allow_missing", action="store_true",
+                        help="Convert whatever is on disk instead of refusing when the "
+                             "download is incomplete")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
     selected = select_image_ids(args.annotations_csv, args.include_normals, args.split)
 
-    written, failed, missing = 0, 0, 0
-    for idx, (image_id, study_id) in enumerate(sorted(selected.items())):
+    # Resolve which DICOMs actually exist BEFORE converting -- an incomplete
+    # download otherwise surfaces as hundreds of interleaved MISSING lines.
+    present = {iid: sid for iid, sid in selected.items()
+               if os.path.exists(os.path.join(args.vindr_root, "images", sid, f"{iid}.dicom"))}
+    missing = len(selected) - len(present)
+    print(f"On disk: {len(present)}/{len(selected)} selected images "
+          f"({100.0 * len(present) / max(len(selected), 1):.1f}%), {missing} missing")
+    if missing and not args.allow_missing:
+        raise SystemExit(
+            f"FATAL: {missing} of {len(selected)} images are not downloaded.\n"
+            f"Run preprocess/vindr_download_mass.sh to fetch them, or pass "
+            f"--allow_missing to convert only the {len(present)} present images."
+        )
+
+    written, failed = 0, 0
+    for idx, (image_id, study_id) in enumerate(sorted(present.items())):
         dcm_path = os.path.join(args.vindr_root, "images", study_id, f"{image_id}.dicom")
-        if not os.path.exists(dcm_path):
-            missing += 1
-            print(f"[{idx + 1}/{len(selected)}] MISSING: {dcm_path}")
-            continue
         try:
             ds = pydicom.dcmread(dcm_path)
             img8 = dicom_to_uint8(ds)
@@ -118,10 +131,10 @@ def main():
             im.save(os.path.join(args.out_dir, f"{image_id}.jpg"), quality=95)
             written += 1
             if written % 50 == 0:
-                print(f"[{idx + 1}/{len(selected)}] {written} written")
+                print(f"[{idx + 1}/{len(present)}] {written} written")
         except Exception as e:
             failed += 1
-            print(f"[{idx + 1}/{len(selected)}] FAILED: {dcm_path} ({e})")
+            print(f"[{idx + 1}/{len(present)}] FAILED: {dcm_path} ({e})")
 
     print(f"Done. written={written}, failed={failed}, missing={missing} -> {args.out_dir}")
     if written == 0:
