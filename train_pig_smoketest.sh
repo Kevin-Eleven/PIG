@@ -3,8 +3,8 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:2
-#SBATCH --time=00:30:00
+#SBATCH --gres=gpu:1
+#SBATCH --time=00:15:00
 #SBATCH --output=/scratch/harisa_iitp/PIG_outputs/smoketest_%j.out
 #SBATCH --error=/scratch/harisa_iitp/PIG_outputs/smoketest_%j.err
 

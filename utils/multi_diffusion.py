@@ -60,9 +60,15 @@ class MultiDiffusion:
         if train_config.resume_train:
             y_states = torch.load(train_config.ckpt_path)
             model.load_state_dict(y_states[0])
-            y_states[1]["param_groups"][0]["eps"] = optim_config.eps
-            optimizer.load_state_dict(y_states[1])
-            start_epoch = y_states[2]
+            if getattr(train_config, 'finetune', False):
+                # 微调模式：只加载模型权重，优化器/学习率/epoch全部重新开始
+                # (resuming the decayed LR + epoch counter from a pretrain run
+                # would effectively freeze fine-tuning)
+                print(f'finetune: loaded weights only from {train_config.ckpt_path}')
+            else:
+                y_states[1]["param_groups"][0]["eps"] = optim_config.eps
+                optimizer.load_state_dict(y_states[1])
+                start_epoch = y_states[2]
 
         log_dir = train_config.log_dir
         if not os.path.exists(log_dir):
