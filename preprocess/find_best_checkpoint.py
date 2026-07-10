@@ -20,11 +20,47 @@ import os
 import re
 
 
+def main_latest(args):
+    """Highest-epoch ckpt_epoch*.pth across ALL run dirs for this desc.
+
+    Chunked/resumed training creates a fresh timestamped log dir per session, so
+    the newest epoch may live in any of them -- scan them all rather than only
+    the most recent dir.
+    """
+    pattern = re.compile(
+        rf"ckpt_epoch(\d+)_loss[\d.]+_{re.escape(args.desc_suffix)}\.pth$"
+    )
+    best_path, best_epoch = None, -1
+    for run_dir in glob.glob(os.path.join(args.log_root, f"*_{args.desc_suffix}")):
+        for fname in os.listdir(run_dir):
+            m = pattern.match(fname)
+            if not m:
+                continue
+            epoch = int(m.group(1))
+            if epoch > best_epoch:
+                best_epoch = epoch
+                best_path = os.path.join(run_dir, fname)
+
+    if best_path is None:
+        raise SystemExit(
+            f"No ckpt_epoch*_{args.desc_suffix}.pth found under {args.log_root}"
+        )
+    print(best_path)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_root", required=True)
     parser.add_argument("--desc_suffix", required=True)
+    parser.add_argument("--latest", action="store_true",
+                        help="Return the highest-epoch ckpt_epoch*.pth instead of the "
+                             "lowest-loss best_epoch*.pth. Use when resuming a chunked "
+                             "training run -- resuming from 'best' would silently rewind "
+                             "training to an earlier epoch.")
     args = parser.parse_args()
+
+    if args.latest:
+        return main_latest(args)
 
     run_dirs = sorted(
         glob.glob(os.path.join(args.log_root, f"*_{args.desc_suffix}")),
